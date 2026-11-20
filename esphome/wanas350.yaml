@@ -1,5 +1,5 @@
 # =====================================================================
-#  WANAS 350 V1 – sterownik KinCony KC868-A4, WERSJA PODSTAWOWA
+#  WANAS 350 V/2 (2019) – sterownik KinCony KC868-A4, WERSJA PODSTAWOWA
 #  Wentylatory 0-10 V + tacho, wbudowana nagrzewnica wstępna 500 W
 #  (przekaźnik K1, włącz/wyłącz jak w oryginale), 5x DS18B20,
 #  bypass 3-punktowy 230 V. Tabliczka: WANAS 350 V/2, 2019.
@@ -9,9 +9,12 @@
 #                 "GND"                               -> GND
 #  NIGDY nie podawaj napięcia na "SIG".
 #
-#  1. Uzupełnij secrets.yaml (wifi_ssid, wifi_password, api_key, ota_password).
-#  2. Po pierwszym starcie odczytaj w logach adresy DS18B20 i wpisz niżej.
-#  3. Sprawdź miernikiem, czy DAC1 = nawiew (inaczej zamień GPIO25/26).
+#  1. Uzupełnij secrets.yaml (wifi_ssid, wifi_password, ap_password, api_key, ota_password)
+#     – wzór w secrets.example.yaml.
+#  2. Obok tego pliku musi leżeć wanas350_czas.h (w HA: /config/esphome/).
+#  3. Adresy DS18B20 niżej są z mojego egzemplarza – wpisz swoje
+#     (odczytasz je w logach ESPHome po pierwszym starcie).
+#  4. Sprawdź miernikiem, czy DAC1 = nawiew (inaczej zamień GPIO25/26).
 # =====================================================================
 
 substitutions:

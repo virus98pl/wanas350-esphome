@@ -17,12 +17,14 @@ ESPHome → ⋮ (prawy górny róg) → **Secrets**. Wklej `esphome/secrets.exam
 - `wifi_ssid`, `wifi_password`: sieć **2,4 GHz** (ESP32 nie obsługuje 5 GHz)
 - `api_key`: wygeneruj na https://esphome.io/components/api/ (pole „encryption key”)
 - `ota_password`: dowolne hasło
+- `ap_password`: hasło awaryjnej sieci `wanas350-awaryjny` (min. 8 znaków)
 
 ## 2. Urządzenie w ESPHome
 
 1. **+ New device** → Continue → nazwa `wanas350` → ESP32 → **Skip** (na razie bez instalacji).
 2. Na kafelku `wanas350` kliknij **Edit**, Ctrl+A, wklej zawartość `esphome/wanas350.yaml` i zapisz.
-3. ⋮ → **Validate**. Powinno pokazać „Configuration is valid”.
+3. Wgraj plik `esphome/wanas350_czas.h` do folderu `/config/esphome/` w Home Assistant, obok `wanas350.yaml` (np. dodatkiem **File editor** albo **Studio Code Server**). Bez niego walidacja i kompilacja kończą się błędem.
+4. ⋮ → **Validate**. Powinno pokazać „Configuration is valid”.
 
 ## 3. Kompilacja
 

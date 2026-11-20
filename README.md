@@ -50,7 +50,7 @@ Wentylatory mają stałe zasilanie przez własne wyłączniki, a zatrzymuje je s
 
 ## Jak działa program
 
-Wszystko siedzi w jednym pliku ESPHome (`esphome/wanas350.yaml`). Logika chodzi **na samym ESP32**, więc jak HA padnie, rekuperator dalej pracuje normalnie. Bez HA przez ponad 10 minut sterownik sam przechodzi w tryb nocny w godzinach 22–6, korzystając z zegara SNTP.
+Program to plik ESPHome `esphome/wanas350.yaml` plus mały plik pomocniczy `esphome/wanas350_czas.h` (licznik czasu bez przepełnienia), który musi leżeć obok niego. Logika chodzi **na samym ESP32**, więc jak HA padnie, rekuperator dalej pracuje normalnie. Bez HA przez ponad 10 minut sterownik sam przechodzi w tryb nocny w godzinach 22–6, korzystając z zegara SNTP.
 
 - **co 1 s:** wylicza wydajność wentylatorów z trybu i biegu, robi płynną rampę, pilnuje odmrażania i nagrzewnicy
 - **rzadziej:** bypass, sezon (średnia temperatura z 24 h), licznik filtrów, alarmy

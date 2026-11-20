@@ -1,0 +1,15 @@
+# Automatyzacja: tryb nocny wg harmonogramu.
+# Najpierw w HA: Ustawienia → Urządzenia i usługi → Pomocnicy → Utwórz → Harmonogram,
+# nazwa "Rekuperator noc", zaznacz godziny nocne.
+# Potem: Automatyzacje → Nowa → Edytuj w YAML → wklej poniższe.
+alias: Rekuperator – noc
+triggers:
+  - trigger: state
+    entity_id: schedule.rekuperator_noc
+actions:
+  - action: select.select_option
+    target:
+      entity_id: select.rekuperator_tryb_pracy
+    data:
+      option: "{{ 'Nocny' if trigger.to_state.state == 'on' else 'Bieg 2' }}"
+mode: single

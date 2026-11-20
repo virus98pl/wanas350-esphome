@@ -309,6 +309,8 @@ sensor:
   - { platform: uptime, type: timestamp, name: "Uruchomiony", entity_category: diagnostic }
   # 16.11.2026: temperatura w domu z HA – do decyzji o bypassie (kanały na strychu
   # zaniżają/zawyżają T wyciągu przy centrali). Bez HA sterownik liczy jak dawniej z T wyciągu.
+  # ZMIEŃ entity_id na swój czujnik temperatury w domu (np. średnia z pokoi). Jeśli go nie masz,
+  # zostaw – encja będzie niedostępna, a bypass liczy wtedy z T wyciągu.
   - { platform: homeassistant, id: t_dom, entity_id: sensor.temperatura_pietro_srednia }
 
 binary_sensor:

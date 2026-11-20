@@ -1,8 +1,8 @@
 # Zrzuty ekranu i zdjęcia
 
-Wrzuć tu zrzuty z Home Assistant i zdjęcia skrzynki, np.:
+- `ha-panel.png` – karta rekuperatora (`homeassistant/rekuperator-card.js`) w panelu HA
+- `ha-stan-sterowanie.png` – stan pracy i sterowanie na stronie urządzenia
+- `ha-ustawienia.png` – ustawienia i progi
+- `skrzynka.jpg` – sterownik zamontowany w rekuperatorze
 
-- `ha-sterowanie.png` – strona urządzenia, sekcja Sterowanie
-- `ha-czujniki.png` – sekcja Czujniki
-- `ha-konfiguracja.png` – sekcja Konfiguracja
-- `skrzynka.jpg` – zmontowany sterownik
+Instrukcja wgrywania programu: [`wgrywanie.md`](wgrywanie.md)

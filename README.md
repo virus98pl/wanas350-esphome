@@ -53,7 +53,7 @@ Wentylatory mają stałe zasilanie przez własne wyłączniki, a zatrzymuje je s
 Program to plik ESPHome `esphome/wanas350.yaml` plus mały plik pomocniczy `esphome/wanas350_czas.h` (licznik czasu bez przepełnienia), który musi leżeć obok niego. Logika chodzi **na samym ESP32**, więc jak HA padnie, rekuperator dalej pracuje normalnie. Bez HA przez ponad 10 minut sterownik sam przechodzi w tryb nocny w godzinach 22–6, korzystając z zegara SNTP.
 
 - **co 1 s:** wylicza wydajność wentylatorów z trybu i biegu, robi płynną rampę, pilnuje odmrażania i nagrzewnicy
-- **rzadziej:** bypass, sezon (średnia temperatura z 24 h), licznik filtrów, alarmy
+- **rzadziej:** bypass, licznik filtrów, alarmy
 - **nastawy** (biegi, progi, balans) zapisują się w pamięci ESP i przetrwają restart
 - **aktualizacje** idą przez Wi-Fi (OTA). Bez Wi-Fi płytka wystawia własny hotspot `wanas350-awaryjny`, a w sieci ma też stronę www.
 
@@ -62,7 +62,7 @@ Program to plik ESPHome `esphome/wanas350.yaml` plus mały plik pomocniczy `esph
 - biegi 1–4, tryb nocny, urlop, wyłączony
 - **Kominek**: kilka minut lekkiego nadciśnienia (więcej nawiewu, mniej wywiewu)
 - **Przewietrzanie**: chwilowo bieg 4
-- **automatyczny bypass** latem: otwiera, gdy w domu jest cieplej niż temperatura komfortu, a na zewnątrz chłodniej
+- **automatyczny bypass** latem: otwiera, gdy w domu jest cieplej niż temperatura komfortu, a na zewnątrz chłodniej. Temperaturę domu bierze z HA (`sensor.temperatura_pietro_srednia` w `wanas350.yaml` – podmień na swój czujnik), a bez HA z czujnika wyciągu
 - **odmrażanie wymiennika**: najpierw nagrzewnica, a jak nie daje rady, przydławia nawiew
 - nagrzewnica grzeje tylko przy pracującym nawiewie (sprawdzane tacho, więc tacho musi być podłączone, a „Kontrola obrotów” włączona)
 - balans nawiew/wywiew do korekty po pomiarze anemometrem
@@ -78,7 +78,6 @@ Program to plik ESPHome `esphome/wanas350.yaml` plus mały plik pomocniczy `esph
 |---|---|
 | Tryb pracy (Bieg 1–4, Nocny, Urlop, Wyłączony) | select |
 | Bypass – tryb (Auto / Otwarty / Zamknięty) | select |
-| Sezon (Auto / Grzewczy / Letni) | select |
 | Kominek, Przewietrzanie, Zakończ tryb czasowy, Reset licznika filtrów | button |
 | T zewnętrzna, T czerpnia, T nawiew, T wyciąg, T wyrzut | sensor °C |
 | Wysterowanie nawiew / wywiew | sensor % |

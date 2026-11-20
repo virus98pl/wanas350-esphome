@@ -107,9 +107,19 @@ W skrócie:
 
 Przykładowy harmonogram nocny jest w [`homeassistant/rekuperator_noc.yaml`](homeassistant/rekuperator_noc.yaml).
 
+Karta z panelu na zrzutach (schemat domu z temperaturami i przyciskami) to [`homeassistant/rekuperator-card.js`](homeassistant/rekuperator-card.js): wrzuć ją do `/config/www/` i dodaj jako zasób `/local/rekuperator-card.js`.
+
 ## Druk 3D
 
-W katalogu [`stl/`](stl/) są części, które wydrukowałem do montażu w rekuperatorze, m.in. podstawka pod kostki/listwy i docisk kabla. Drukowałem z PLA, ale do elementów, które mają się zginać, lepszy będzie PETG.
+Części, które wydrukowałem do montażu w rekuperatorze (katalog [`stl/`](stl/)):
+
+| Plik | Co to jest |
+|---|---|
+| `wanas_podstawka_sterownika.stl` | płyta pod KC868-A4 w obudowie DIN i bloki 1-Wire, w miejsce fabrycznej płytki (odcinek szyny TH35 przykręcany M3 z nakrętkami wsuwanymi w rowek) |
+| `wanas_docisk_3x8mm.stl` | docisk na 3 kable 230 V (Ø ok. 8 mm) |
+| `wanas_docisk_1x6mm.stl` | docisk na kabel sygnałowy 12 V (Ø ok. 6 mm) |
+
+Widać je na zdjęciu skrzynki wyżej. Zanim wydrukujesz, sprawdź wymiary swojej obudowy sterownika.
 
 ## Licencja
 

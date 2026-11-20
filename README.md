@@ -108,6 +108,8 @@ Przykładowy harmonogram nocny jest w [`homeassistant/rekuperator_noc.yaml`](hom
 
 Karta z panelu na zrzutach (schemat domu z temperaturami i przyciskami) to [`homeassistant/rekuperator-card.js`](homeassistant/rekuperator-card.js): wrzuć ją do `/config/www/` i dodaj jako zasób `/local/rekuperator-card.js`.
 
+Cały widok „Rekuperator” z tych zrzutów (karta, wykres temperatur, stan, sterowanie, ustawienia) jest w [`homeassistant/rekuperator_widok.yaml`](homeassistant/rekuperator_widok.yaml) – wklej go w edytorze kodu dashboardu jako kolejny element `views:`.
+
 ## Druk 3D
 
 Części, które wydrukowałem do montażu w rekuperatorze (katalog [`stl/`](stl/)):

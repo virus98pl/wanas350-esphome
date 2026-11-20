@@ -1,0 +1,197 @@
+# Widok (zakładka) „Rekuperator” do dashboardu Home Assistant.
+# Dashboard → ⋮ → Edytuj → ⋮ → Edytor kodu (raw) i wklej ten blok w sekcji `views:`
+# (jako kolejny element listy). Encje zakładają nazwę urządzenia w ESPHome
+# „Rekuperator” (friendly_name w wanas350.yaml) – jeśli masz inną, popraw prefiks
+# `rekuperator_` w identyfikatorach.
+# Pierwsza karta (custom:rekuperator-card) wymaga homeassistant/rekuperator-card.js
+# dodanego jako zasób /local/rekuperator-card.js. Pozostałe karty są standardowe.
+- title: Rekuperator
+  path: rekuperator
+  icon: mdi:air-filter
+  type: sections
+  max_columns: 3
+  sections:
+    - type: grid
+      column_span: 2
+      cards:
+        - type: custom:rekuperator-card
+          title: Rekuperator WANAS 350
+          entities:
+            t_out: sensor.rekuperator_t_zewnetrzna_przed_nagrzewnica
+            t_room: sensor.rekuperator_t_wyciag_dom
+            t_exh: sensor.rekuperator_t_wyrzut
+            t_sup: sensor.rekuperator_t_nawiew
+            mode: select.rekuperator_tryb_pracy
+            bypass_mode: select.rekuperator_bypass_tryb
+            state: sensor.rekuperator_stan_pracy
+            duty: sensor.rekuperator_wysterowanie_nawiew
+            duty_exh: sensor.rekuperator_wysterowanie_wywiew
+            rpm_sup: sensor.rekuperator_obroty_nawiew
+            rpm_exh: sensor.rekuperator_obroty_wywiew
+            eff: sensor.rekuperator_sprawnosc_odzysku
+            alarm: sensor.rekuperator_aktywne_alarmy
+            party_btn: button.rekuperator_przewietrzanie
+            party_min: number.rekuperator_przewietrzanie_czas_min
+            fire_btn: button.rekuperator_kominek
+            fire_min: number.rekuperator_kominek_czas_min
+            stop_btn: button.rekuperator_zakoncz_tryb_czasowy
+            party_left: sensor.rekuperator_przewietrzanie_pozostalo_min
+            fire_left: sensor.rekuperator_kominek_pozostalo_min
+        - type: history-graph
+          title: Temperatury – 24 h
+          hours_to_show: 24
+          entities:
+            - entity: sensor.rekuperator_t_zewnetrzna_przed_nagrzewnica
+              name: Zewnętrzna
+            - entity: sensor.rekuperator_t_nawiew
+              name: Nawiew
+            - entity: sensor.rekuperator_t_wyciag_dom
+              name: Wyciąg (dom)
+            - entity: sensor.rekuperator_t_wyrzut
+              name: Wyrzut
+    - type: grid
+      cards:
+        - type: heading
+          heading: Stan
+          icon: mdi:information-outline
+        - type: tile
+          entity: sensor.rekuperator_stan_pracy
+          name: Stan pracy
+          icon: mdi:air-filter
+        - type: tile
+          entity: sensor.rekuperator_sprawnosc_odzysku
+          name: Sprawność odzysku
+          icon: mdi:percent
+        - type: tile
+          entity: sensor.rekuperator_aktywne_alarmy
+          name: Alarmy
+          icon: mdi:alert-circle-outline
+        - type: tile
+          entity: binary_sensor.rekuperator_nagrzewnica_wstepna_pracuje
+          name: Nagrzewnica wstępna
+          icon: mdi:radiator
+          color: orange
+        - type: tile
+          entity: binary_sensor.rekuperator_bypass_otwarty
+          name: Bypass otwarty
+          icon: mdi:swap-horizontal
+          color: blue
+        - type: tile
+          entity: sensor.rekuperator_wysterowanie_nawiew
+          name: Wysterowanie nawiew
+          icon: mdi:fan
+        - type: tile
+          entity: sensor.rekuperator_wysterowanie_wywiew
+          name: Wysterowanie wywiew
+          icon: mdi:fan
+        - type: tile
+          entity: sensor.rekuperator_obroty_nawiew
+          name: Obroty nawiew
+          icon: mdi:fan-speed-1
+        - type: tile
+          entity: sensor.rekuperator_obroty_wywiew
+          name: Obroty wywiew
+          icon: mdi:fan-speed-1
+        - type: tile
+          entity: sensor.rekuperator_filtry_dni_pracy
+          name: Filtry – dni pracy
+          icon: mdi:air-filter
+        - type: tile
+          entity: binary_sensor.rekuperator_filtry_do_wymiany
+          name: Filtry do wymiany
+          icon: mdi:filter-remove
+          color: red
+        - type: tile
+          entity: sensor.rekuperator_wi_fi_sygnal
+          name: Wi-Fi sterownika
+          icon: mdi:wifi
+    - type: grid
+      cards:
+        - type: heading
+          heading: Sterowanie
+          icon: mdi:tune-variant
+        - type: tile
+          entity: select.rekuperator_tryb_pracy
+          name: Tryb pracy
+          icon: mdi:fan
+          features:
+            - type: select-options
+          features_position: bottom
+          vertical: false
+        - type: tile
+          entity: select.rekuperator_bypass_tryb
+          name: Bypass – tryb
+          icon: mdi:swap-horizontal
+          features:
+            - type: select-options
+          features_position: bottom
+          vertical: false
+        - type: tile
+          entity: button.rekuperator_przewietrzanie
+          name: Przewietrzanie (start)
+          icon: mdi:weather-windy
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.rekuperator_przewietrzanie
+        - type: tile
+          entity: button.rekuperator_kominek
+          name: Kominek (start)
+          icon: mdi:fireplace
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.rekuperator_kominek
+        - type: tile
+          entity: button.rekuperator_zakoncz_tryb_czasowy
+          name: Zakończ tryb czasowy
+          icon: mdi:timer-off-outline
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.rekuperator_zakoncz_tryb_czasowy
+        - type: tile
+          entity: button.rekuperator_reset_licznika_filtrow
+          name: Reset licznika filtrów (po wymianie)
+          icon: mdi:backup-restore
+          tap_action:
+            action: perform-action
+            perform_action: button.press
+            target:
+              entity_id: button.rekuperator_reset_licznika_filtrow
+            confirmation:
+              text: Zerować licznik filtrów? Rób to tylko po wymianie filtrów.
+    - type: grid
+      column_span: 3
+      cards:
+        - type: heading
+          heading: Ustawienia i progi
+          icon: mdi:cog-outline
+        - type: entities
+          title: Biegi i tryby [%]
+          entities:
+            - number.rekuperator_bieg_1
+            - number.rekuperator_bieg_2
+            - number.rekuperator_bieg_3
+            - number.rekuperator_bieg_4
+            - number.rekuperator_minimalne_wysterowanie
+            - number.rekuperator_tryb_nocny_maks
+            - number.rekuperator_tryb_urlop
+            - number.rekuperator_balans_wywiew_wzgledem_nawiewu_pkt
+        - type: entities
+          title: Kominek, przewietrzanie, filtry
+          entities:
+            - number.rekuperator_kominek_czas_min
+            - number.rekuperator_kominek_nadcisnienie_pkt
+            - number.rekuperator_przewietrzanie_czas_min
+            - number.rekuperator_wymiana_filtrow_co_dni_pracy
+        - type: entities
+          title: Bypass, nagrzewnica, odmrażanie
+          entities:
+            - number.rekuperator_temperatura_komfortu_degc
+            - number.rekuperator_bypass_min_temp_czerpni_degc
+            - number.rekuperator_nagrzewnica_blokada_powyzej_t_zew_degc
+            - number.rekuperator_odmrazanie_min_t_wyrzutu_degc

@@ -1,0 +1,6 @@
+# TU WKLEJ AKTUALNY PROGRAM Z ESPHOME
+# ESPHome → wanas350 → EDIT → Ctrl+A → Ctrl+C, wklej tutaj i zapisz.
+#
+# Przed publikacją sprawdź, że w pliku nie ma haseł wpisanych na sztywno
+# (powinny być tylko odwołania !secret ...). Adresy DS18B20 możesz zostawić
+# albo zamienić na "0x0000000000000000".

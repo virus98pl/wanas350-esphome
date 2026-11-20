@@ -65,7 +65,7 @@ Po restarcie płytka łączy się z Wi-Fi i w HA pojawia się powiadomienie „W
 
 Jeśli powiadomienie się nie pojawi: Ustawienia → Urządzenia i usługi → Dodaj integrację → ESPHome → `wanas350.local` albo adres IP z routera.
 
-Jeśli płytka nie połączy się z Wi-Fi, wystawia własną sieć **„wanas350-awaryjny”**. Połącz się z nią telefonem i wpisz poprawne dane sieci.
+Jeśli płytka nie połączy się z Wi-Fi, wystawia własną sieć **„wanas350-awaryjny”** (hasło: `ap_password` z Secrets). Połącz się z nią telefonem i wpisz poprawne dane sieci.
 
 ## 6. Kolejne aktualizacje
 

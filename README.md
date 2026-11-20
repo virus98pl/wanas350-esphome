@@ -4,6 +4,16 @@ Zamiennik fabrycznej płytki do rekuperatora **WANAS 350 V/2** zbudowany na **Ki
 
 Skąd to się wzięło? Fabrycznego sterownika nie dało się sensownie spiąć z Home Assistant, a potem jego płytka po prostu padła. Nowa od producenta jest droga i dalej nie gada z HA. Zrobiłem więc własny sterownik. Może się komuś przyda, jeśli ma podobny problem, także z innym rekuperatorem na wentylatorach EC 0–10 V.
 
+<p align="center">
+  <img src="docs/ha-panel.png" width="260" alt="Panel rekuperatora w Home Assistant">
+  <img src="docs/ha-stan-sterowanie.png" width="260" alt="Stan i sterowanie">
+  <img src="docs/ha-ustawienia.png" width="260" alt="Ustawienia i progi">
+</p>
+
+<p align="center">
+  <img src="docs/skrzynka.jpg" width="520" alt="KC868-A4 zamontowany w rekuperatorze WANAS 350">
+</p>
+
 > ⚠️ **Uwaga:** to praca przy 230 V, a w środku jest nagrzewnica. Jeśli nie czujesz się pewnie, podłączenie zostaw elektrykowi. Gwarancja na centralę oczywiście przepada. Robisz to na własną odpowiedzialność.
 
 ---
@@ -80,7 +90,7 @@ Wszystko siedzi w jednym pliku ESPHome (`esphome/wanas350.yaml`). Logika chodzi 
 | Biegi 1–4, temperatura komfortu, progi odmrażania, minimalne wysterowanie, balans, wymiana filtrów co X dni… | number (konfiguracja) |
 | Tryb testowy, Kontrola obrotów (tacho) | switch (konfiguracja) |
 
-Zrzuty ekranu są w katalogu [`docs/`](docs/).
+Zrzuty ekranu są na górze strony i w katalogu [`docs/`](docs/).
 
 ## Instalacja
 
@@ -96,6 +106,10 @@ W skrócie:
 6. Na koniec sprawdź trzy rzeczy: czy DAC1 to na pewno nawiew (jeśli nie, zamień GPIO25/26), w którą stronę rusza bypass (jeśli odwrotnie, zamień NO/NC na K3) i czy obroty z tacho wychodzą sensowne.
 
 Przykładowy harmonogram nocny jest w [`homeassistant/rekuperator_noc.yaml`](homeassistant/rekuperator_noc.yaml).
+
+## Druk 3D
+
+W katalogu [`stl/`](stl/) są części, które wydrukowałem do montażu w rekuperatorze, m.in. podstawka pod kostki/listwy i docisk kabla. Drukowałem z PLA, ale do elementów, które mają się zginać, lepszy będzie PETG.
 
 ## Licencja
 

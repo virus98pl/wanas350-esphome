@@ -1,7 +1,13 @@
 /* Rekuperator Card – custom Lovelace card dla Home Assistant
    Plik: /config/www/rekuperator-card.js  → zasób: /local/rekuperator-card.js
    Obsługiwane domeny: sensor, number, input_number, select, input_select,
-   switch, input_boolean, fan (bieg jako % – 0..4 → 0..100%). */
+   switch, input_boolean, fan, button.
+   Wersja 2 (9.11.2026): dopasowana do sterownika ESPHome wanas350 (WANAS 350 / KC868-A4).
+   Klucze entities: t_out,t_room,t_exh,t_sup (temperatury), mode (select tryb pracy),
+   bypass_mode (select), state (sensor stan pracy), duty (wysterowanie nawiewu %),
+   duty_exh, rpm_sup, rpm_exh, eff (sprawność), alarm (sensor alarmów),
+   party_btn+party_min (Przewietrzanie: przycisk + number czasu), fire_btn+fire_min (Kominek),
+   stop_btn (zakończ tryb czasowy), party_left/fire_left (pozostało min). */
 
 const DAYS = ["Niedziela","Poniedziałek","Wtorek","Środa","Czwartek","Piątek","Sobota"];
 
@@ -13,6 +19,8 @@ ha-card{overflow:hidden;background:#1d1d20;padding:10px;border-radius:12px}
 .screen{background:linear-gradient(180deg,var(--screen),var(--screen2));border-radius:4px;color:var(--ink);
  position:relative;display:flex;flex-direction:column;font-family:"Segoe UI",Roboto,Arial,sans-serif;min-height:280px}
 .top{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid #b9b8cf;color:var(--muted);font-size:15px}
+.top .inf{font-size:14px;font-weight:600}.top .inf.bad{color:var(--red)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:14px;margin-top:6px}.kv b{font-weight:600}
 .main{flex:1;display:grid;grid-template-columns:1fr 1.25fr 1fr;align-items:center;padding:6px 8px;gap:4px}
 .col{display:flex;flex-direction:column;gap:26px}
 .temp{display:flex;align-items:center;gap:6px;cursor:pointer}
@@ -64,7 +72,7 @@ ${[0,90,180,270].map(r=>`<g transform="rotate(${r})">${BLADE}</g>`).join("")}<ci
 
 class RekuperatorCard extends HTMLElement {
   setConfig(config){
-    this._cfg = { party_options:[30,60,90,120], fire_options:[10,15,20,30], fan_max:4,
+    this._cfg = { party_options:[15,30,60,90,135,180,240], fire_options:[3,5,8,10,15,20,30], fan_max:4,
                   programs:null, ...config, entities:{...(config.entities||{})} };
     this._open = null;
     if (!this.shadowRoot) this.attachShadow({mode:"open"});
@@ -78,7 +86,9 @@ class RekuperatorCard extends HTMLElement {
   /* ---------- helpers ---------- */
   _e(k){ const id=this._cfg.entities[k]; return id && this._hass ? this._hass.states[id] : undefined; }
   _num(k){ const s=this._e(k); const v=s?parseFloat(s.state):NaN; return isNaN(v)?null:v; }
-  _fan(){ const s=this._e("fan"); if(!s) return null;
+  _lvl(){ const st=this._e("state"); if(st && st.state==="Wyłączony") return 0;
+    const d=this._num("duty"); if(d==null) return null; return d<=0?0:Math.min(4,Math.ceil(d/25)); }
+  _fan(){ const s=this._e("fan"); if(!s) return this._lvl();
     if (s.entity_id.startsWith("fan.")) return s.state==="off"?0:Math.round((s.attributes.percentage||0)/100*this._cfg.fan_max);
     return this._num("fan"); }
   _on(k){ const s=this._e(k); return s ? s.state==="on" : false; }
@@ -86,7 +96,8 @@ class RekuperatorCard extends HTMLElement {
   _set(k,val){
     const id=this._cfg.entities[k]; if(!id) return;
     const d=id.split(".")[0], h=this._hass;
-    if (d==="number"||d==="input_number") h.callService(d,"set_value",{entity_id:id,value:val});
+    if (d==="button") h.callService("button","press",{entity_id:id});
+    else if (d==="number"||d==="input_number") h.callService(d,"set_value",{entity_id:id,value:val});
     else if (d==="select"||d==="input_select") h.callService(d,"select_option",{entity_id:id,option:val});
     else if (d==="switch"||d==="input_boolean") h.callService(d,val?"turn_on":"turn_off",{entity_id:id});
     else if (d==="fan") val ? h.callService("fan","set_percentage",{entity_id:id,percentage:Math.round(val/this._cfg.fan_max*100)})
@@ -99,7 +110,7 @@ class RekuperatorCard extends HTMLElement {
   _build(){
     const T=(id,lbl,c)=>`<div class="temp" data-more="${id}">${THERM(c)}<div><div class="tv" id="${id}">--<sup>°</sup></div><div class="tl">${lbl}</div></div></div>`;
     this.shadowRoot.innerHTML = `<style>${CSS}</style><ha-card><div class="screen">
-      <div class="top"><span>${this._cfg.title||""}</span><span id="clock"></span></div>
+      <div class="top"><span>${this._cfg.title||""}</span><span class="inf" id="inf"></span><span id="clock"></span></div>
       <div class="main">
         <div class="col">${T("t_out","Zewnętrzna","b")}${T("t_room","Pomieszczenia","r")}</div>
         <svg class="house" id="house" viewBox="0 0 260 230">
@@ -118,9 +129,9 @@ class RekuperatorCard extends HTMLElement {
         <div class="col right">${T("t_exh","Wyrzutowa","b")}${T("t_sup","Nawiewana","r")}</div>
       </div>
       <div class="bar">
-        <button class="tab" data-s="programs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fff"/><path d="M12 6v6h5" stroke="var(--bar-d)" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="l" id="progL">Programy</span></button>
-        <button class="tab party" id="tP" data-s="party"><svg viewBox="0 0 24 24" fill="#fff"><path d="M4 3h16l-7 9v7h4v2H7v-2h4v-7z"/></svg><span class="l">Impreza<small id="pT">00:00</small></span></button>
-        <button class="tab fire" id="tF" data-s="fire"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9zM4 20h16v2H4z"/></svg><span class="l">Kominek<small id="fT">00:00</small></span></button>
+        <button class="tab" data-s="programs"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fff"/><path d="M12 6v6h5" stroke="var(--bar-d)" stroke-width="2" fill="none" stroke-linecap="round"/></svg><span class="l" id="progL">Tryb</span></button>
+        <button class="tab party" id="tP" data-s="party"><svg viewBox="0 0 24 24" fill="#fff"><path d="M4 3h16l-7 9v7h4v2H7v-2h4v-7z"/></svg><span class="l">Przewietrzanie<small id="pT">—</small></span></button>
+        <button class="tab fire" id="tF" data-s="fire"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2c1 4 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-9zM4 20h16v2H4z"/></svg><span class="l">Kominek<small id="fT">—</small></span></button>
         <button class="tab" data-s="settings"><svg viewBox="0 0 24 24" fill="#fff"><circle cx="9" cy="10" r="6"/><circle cx="9" cy="10" r="2.3" fill="var(--bar-d)"/><circle cx="18" cy="17" r="4"/><circle cx="18" cy="17" r="1.5" fill="var(--bar-d)"/></svg><span class="l">Ustawienia</span></button>
       </div>
       <div class="bg" id="bg"><div class="sheet" id="sheet"></div></div>
@@ -135,12 +146,15 @@ class RekuperatorCard extends HTMLElement {
       if (e.target.id==="bg"||e.target.closest(".x")) return this._close();
       const b=e.target.closest("[data-a]"); if(!b||b.tagName==="INPUT") return;
       const a=b.dataset.a, v=b.dataset.v;
-      if (a==="program") this._set("program",v);
-      if (a==="fan") this._set("fan",+v);
-      if (a==="party"){ this._set("party",+v); if(+v) this._set("fire",0); }
-      if (a==="fire"){ this._set("fire",+v); if(+v) this._set("party",0); }
+      if (a==="mode") this._set("mode",v);
+      if (a==="bypass_mode") this._set("bypass_mode",v);
+      if (a==="party_min") this._set("party_min",+v);
+      if (a==="fire_min") this._set("fire_min",+v);
+      if (a==="party_go") this._set("party_btn",1);
+      if (a==="fire_go") this._set("fire_btn",1);
+      if (a==="stop") this._set("stop_btn",1);
     });
-    $("bg").addEventListener("change",e=>{ if(e.target.dataset.a==="bypass") this._set("bypass",e.target.checked); });
+
     clearInterval(this._clk); this._clk=setInterval(()=>this._clock(),10000); this._clock();
   }
 
@@ -155,18 +169,26 @@ class RekuperatorCard extends HTMLElement {
     const $=this.$, f=v=>v==null?"--<sup>°</sup>":`${v.toFixed(1)}<sup>°</sup>`;
     $("t_out").innerHTML=f(this._num("t_out")); $("t_room").innerHTML=f(this._num("t_room"));
     $("t_exh").innerHTML=f(this._num("t_exh")); $("t_sup").innerHTML=f(this._num("t_sup"));
-    const party=this._min("party"), fire=this._min("fire");
-    const lvl = party>0 ? this._cfg.fan_max : (this._fan()??0);
+    const stn=this._e("state")?this._e("state").state:"";
+    const partyOn=stn==="Przewietrzanie", fireOn=stn==="Kominek";
+    const lvl = this._lvl() ?? 0;
     const bars=(g,l)=>g.innerHTML=[0,1,2,3].map(i=>{const h=5+i*4;
       return `<rect x="${i*8}" y="${18-h}" width="5" height="${h}" fill="${i<l?'var(--blue-d)':'none'}" stroke="var(--blue-d)" stroke-width="1.3"/>`}).join("");
-    bars($("b1"),lvl); bars($("b2"),fire>0?Math.max(0,lvl-1):lvl);
+    const dEx=this._num("duty_exh"), lvlEx=dEx==null?lvl:(dEx<=0?0:Math.min(4,Math.ceil(dEx/25)));
+    bars($("b1"),lvl); bars($("b2"),lvlEx);
     this.shadowRoot.querySelectorAll(".fan").forEach(e=>{e.style.setProperty("--spd",lvl?(2.4/lvl)+"s":"0s");e.classList.toggle("stop",!lvl);});
     this.shadowRoot.querySelectorAll(".flow").forEach(e=>{e.style.setProperty("--fl",(2.4/Math.max(lvl,1))+"s");e.classList.toggle("stop",!lvl);});
-    const hm=m=>`${String(Math.floor(m/60)).padStart(2,"0")}:${String(Math.round(m%60)).padStart(2,"0")}`;
-    $("pT").textContent=hm(party); $("fT").textContent=hm(fire);
-    $("tP").classList.toggle("on",party>0); $("tF").classList.toggle("on",fire>0);
-    $("tP").classList.toggle("na",!this._cfg.entities.party); $("tF").classList.toggle("na",!this._cfg.entities.fire);
-    const p=this._e("program"); $("progL").textContent = p && p.state!=="Auto" ? p.state : "Programy";
+    const pm=this._num("party_min"), fm=this._num("fire_min");
+    const pl=this._num("party_left"), fl=this._num("fire_left");
+    $("pT").textContent = partyOn ? (pl!=null&&pl>0 ? "zostało "+Math.round(pl)+" min" : "aktywne") : (pm!=null ? Math.round(pm)+" min" : "—");
+    $("fT").textContent = fireOn ? (fl!=null&&fl>0 ? "zostało "+Math.round(fl)+" min" : "aktywny") : (fm!=null ? Math.round(fm)+" min" : "—");
+    $("tP").classList.toggle("on",partyOn); $("tF").classList.toggle("on",fireOn);
+    $("tP").classList.toggle("na",!this._cfg.entities.party_btn); $("tF").classList.toggle("na",!this._cfg.entities.fire_btn);
+    const m=this._e("mode"); $("progL").textContent = m ? m.state : "Tryb";
+    const al=this._e("alarm"), ef=this._num("eff"), inf=$("inf");
+    const bad = al && !["brak","unknown","unavailable",""].includes(al.state);
+    inf.classList.toggle("bad",!!bad);
+    inf.textContent = bad ? "⚠ "+al.state : (ef!=null ? "Odzysk "+Math.round(ef)+"%" : "");
     if (this._open) this._draw(this._open);
   }
 
@@ -176,24 +198,38 @@ class RekuperatorCard extends HTMLElement {
   _draw(n){
     const seg=(opts,cur,a)=>`<div class="seg">${opts.map(o=>`<button class="${String(o.v)===String(cur)?'sel':''}" data-a="${a}" data-v="${o.v}">${o.l}</button>`).join("")}</div>`;
     const h=(t)=>`<h2>${t}<button class="x">×</button></h2>`;
-    const party=this._min("party"), fire=this._min("fire"), c=this._cfg;
+    const c=this._cfg, stn=this._e("state")?this._e("state").state:"";
+    const kv=(l,v)=>v==null?"":`<span>${l}</span><b>${v}</b>`;
+    const f=(k,u,d=0)=>{const v=this._num(k);return v==null?null:v.toFixed(d)+u;};
     let html="";
     if(n==="programs"){
-      const p=this._e("program"), opts=c.programs||(p&&p.attributes.options)||[];
-      html=h("Programy")+(p?`<div class="row"><span>Tryb pracy</span>${seg(opts.map(o=>({v:o,l:o})),p.state,"program")}</div>`
-                          :`<p class="muted">Dodaj encję <b>program</b> (select) w konfiguracji karty.</p>`);
+      const m=this._e("mode"), opts=c.programs||(m&&m.attributes.options)||[];
+      html=h("Tryb pracy")+(m?`<div class="row"><span>Tryb</span>${seg(opts.map(o=>({v:o,l:o})),m.state,"mode")}</div>
+        <p class="muted">Bieg 1–4: stała wydajność · Nocny: cichy, ograniczony · Urlop: minimalna wymiana · Wyłączony: wentylatory stoją.</p>`
+        :`<p class="muted">Dodaj encję <b>mode</b> (select „Tryb pracy”) w konfiguracji karty.</p>`);
     }
-    if(n==="party") html=h("Impreza")+`<p class="muted">Maksymalny bieg na określony czas.${party>0?` Pozostało <b>${Math.round(party)} min</b>.`:""}</p>
-      <div class="row"><span>Czas</span>${seg(c.party_options.map(m=>({v:m,l:m+" min"})),null,"party")}</div>
-      ${party>0?`<button class="big" data-a="party" data-v="0">Zakończ imprezę</button>`:""}`;
-    if(n==="fire") html=h("Kominek")+`<p class="muted">Nadciśnienie przy rozpalaniu kominka.${fire>0?` Pozostało <b>${Math.round(fire)} min</b>.`:""}</p>
-      <div class="row"><span>Czas</span>${seg(c.fire_options.map(m=>({v:m,l:m+" min"})),null,"fire")}</div>
-      ${fire>0?`<button class="big" data-a="fire" data-v="0">Wyłącz tryb kominka</button>`:""}`;
+    if(n==="party"){
+      const on=stn==="Przewietrzanie", e=this._e("party_min");
+      html=h("Przewietrzanie")+`<p class="muted">Podwyższony bieg (Bieg 4) na ustawiony czas.${on?` <b>Trwa teraz${this._num("party_left")>0?", zostało "+Math.round(this._num("party_left"))+" min":""}.</b>`:""}</p>`+
+        (e?`<div class="row"><span>Czas</span>${seg(c.party_options.map(m=>({v:m,l:m+" min"})),Math.round(this._num("party_min")||0),"party_min")}</div>`:"")+
+        `<button class="big" data-a="party_go">${on?"Start od nowa":"Włącz przewietrzanie"}</button>`+
+        (on?`<button class="big" data-a="stop">Zakończ</button>`:"");
+    }
+    if(n==="fire"){
+      const on=stn==="Kominek", e=this._e("fire_min");
+      html=h("Kominek")+`<p class="muted">Nadciśnienie w domu przy rozpalaniu kominka.${on?` <b>Trwa teraz${this._num("fire_left")>0?", zostało "+Math.round(this._num("fire_left"))+" min":""}.</b>`:""}</p>`+
+        (e?`<div class="row"><span>Czas</span>${seg(c.fire_options.map(m=>({v:m,l:m+" min"})),Math.round(this._num("fire_min")||0),"fire_min")}</div>`:"")+
+        `<button class="big" data-a="fire_go">${on?"Start od nowa":"Włącz tryb kominka"}</button>`+
+        (on?`<button class="big" data-a="stop">Zakończ</button>`:"");
+    }
     if(n==="settings"){
-      const fan=this._fan(), lv=[...Array(c.fan_max+1).keys()];
-      html=h("Ustawienia")+
-        (c.entities.fan?`<div class="row"><span>Bieg wentylatorów</span>${seg(lv.map(v=>({v,l:v?String(v):"Off"})),fan,"fan")}</div>`:"")+
-        (c.entities.bypass?`<div class="row"><span>Bypass (lato)</span><label class="sw"><input type="checkbox" data-a="bypass" ${this._on("bypass")?"checked":""}><span></span></label></div>`:"");
+      const b=this._e("bypass_mode");
+      html=h("Ustawienia i stan")+
+        (b?`<div class="row"><span>Bypass (lato)</span>${seg((b.attributes.options||[]).map(o=>({v:o,l:o})),b.state,"bypass_mode")}</div>`:"")+
+        `<div class="kv">${kv("Stan pracy",stn||null)}${kv("Odzysk ciepła",f("eff"," %"))}
+          ${kv("Nawiew",[f("duty"," %"),f("rpm_sup"," obr/min")].filter(Boolean).join(" · ")||null)}
+          ${kv("Wywiew",[f("duty_exh"," %"),f("rpm_exh"," obr/min")].filter(Boolean).join(" · ")||null)}
+          ${kv("Alarmy",this._e("alarm")?this._e("alarm").state:null)}</div>`;
     }
     const sh=this.$("sheet"), y=sh.scrollTop; sh.innerHTML=html; sh.scrollTop=y;
   }

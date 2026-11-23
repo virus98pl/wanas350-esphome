@@ -65,12 +65,13 @@ Program to plik ESPHome `esphome/wanas350.yaml` plus mały plik pomocniczy `esph
 - **automatyczny bypass** latem: otwiera, gdy w domu jest cieplej niż temperatura komfortu, a na zewnątrz chłodniej. Temperaturę domu bierze z HA (`sensor.temperatura_pietro_srednia` w `wanas350.yaml` – podmień na swój czujnik), a bez HA z czujnika wyciągu
 - **odmrażanie wymiennika**: najpierw nagrzewnica, a jak nie daje rady, przydławia nawiew
 - nagrzewnica grzeje tylko przy pracującym nawiewie (sprawdzane tacho, więc tacho musi być podłączone, a „Kontrola obrotów” włączona)
+- **zabezpieczenia nagrzewnicy**: gdy temperatura za nagrzewnicą (T_CZE) przekroczy nastawę (domyślnie 40 °C), K1 się wyłącza i zostaje zablokowany do ręcznego skasowania przyciskiem „Nagrzewnica – skasuj blokadę przegrzania” (blokada przetrwa restart); po ciągłej pracy dłuższej niż nastawa (domyślnie 60 min) robi 10 min przerwy; bez odczytu T_CZE nie grzeje wcale. Gdy nagrzewnica jest zablokowana albo ma przerwę, odmrażanie działa dławieniem nawiewu
 - balans nawiew/wywiew do korekty po pomiarze anemometrem
 - licznik dni pracy filtrów z przypomnieniem i resetem
-- alarmy: czujniki, wentylatory (brak obrotów), ryzyko zamarzania, filtry
+- alarmy: czujniki, wentylatory (brak obrotów), ryzyko zamarzania, przegrzanie nagrzewnicy, filtry
 - **tryb testowy**: ręczne ustawianie wentylatorów przy uruchamianiu
 
-> 🔥 **Nagrzewnica** jest załączana bezpośrednio przekaźnikiem K1, tak samo jak w fabrycznej płytce. Zabezpieczenie jest tylko w programie. Sprawdź, czy Twoja nagrzewnica ma wbudowany termik przegrzewowy. Jeśli nie ma, warto dołożyć szeregowo bimetal NC z ręcznym resetem.
+> 🔥 **Nagrzewnica** jest załączana bezpośrednio przekaźnikiem K1, tak samo jak w fabrycznej płytce. Zabezpieczenie (przegrzanie, limit czasu pracy) jest tylko w programie. Sprawdź, czy Twoja nagrzewnica ma wbudowany termik przegrzewowy. Jeśli nie ma, warto dołożyć szeregowo bimetal NC z ręcznym resetem.
 
 ## Encje w Home Assistant
 

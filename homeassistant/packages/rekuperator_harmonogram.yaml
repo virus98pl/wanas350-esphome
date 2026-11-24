@@ -1,0 +1,77 @@
+# =====================================================================
+#  REKUPERATOR – HARMONOGRAM (dodane 10.11.2026, zgoda użytkownika)
+#  Plik: /config/packages/rekuperator_harmonogram.yaml
+#  Godziny nocy: pomocnik schedule.rekuperator_noc (Ustawienia → Urządzenia
+#  i usługi → Pomocnicy → „Rekuperator noc”; domyślnie 22:00–06:30 codziennie).
+#  Gdy noc trwa  → tryb z input_select.rekuperator_tryb_noc  (domyślnie Nocny).
+#  Poza nocą     → tryb z input_select.rekuperator_tryb_dzien (domyślnie Bieg 2).
+#  Zmiana następuje przy starcie/końcu nocy, przy zmianie wyboru, po powrocie
+#  sterownika online oraz po końcu Przewietrzania/Kominka. Ręczna zmiana biegu
+#  obowiązuje do następnej zmiany. Nie rusza trybów Urlop i Wyłączony.
+#  Wyłącznik: input_boolean.rekuperator_harmonogram_wlaczony.
+#  24.11.2026: pomija zmianę, gdy trwa podbicie biegu z wilgoci.
+# =====================================================================
+input_boolean:
+  rekuperator_harmonogram_wlaczony:
+    name: "Rekuperator – harmonogram włączony"
+    icon: mdi:calendar-clock
+    initial: true
+
+input_select:
+  rekuperator_tryb_dzien:
+    name: "Rekuperator – tryb w dzień"
+    icon: mdi:weather-sunny
+    options: ["Bieg 1", "Bieg 2", "Bieg 3", "Bieg 4", "Nocny"]
+    initial: "Bieg 2"
+  rekuperator_tryb_noc:
+    name: "Rekuperator – tryb w nocy"
+    icon: mdi:weather-night
+    options: ["Bieg 1", "Bieg 2", "Bieg 3", "Bieg 4", "Nocny"]
+    initial: "Nocny"
+
+automation:
+  - id: rekuperator_harmonogram
+    alias: Rekuperator – harmonogram dzień/noc
+    mode: restart
+    trigger:
+      - platform: state
+        entity_id: schedule.rekuperator_noc
+      - platform: state
+        entity_id:
+          - input_select.rekuperator_tryb_dzien
+          - input_select.rekuperator_tryb_noc
+      - platform: state
+        entity_id: input_boolean.rekuperator_harmonogram_wlaczony
+        to: "on"
+      - platform: state
+        entity_id: select.rekuperator_tryb_pracy
+        from: unavailable
+      - platform: state
+        entity_id: sensor.rekuperator_stan_pracy
+        from: ["Przewietrzanie", "Kominek"]
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_harmonogram_wlaczony
+        state: "on"
+      # podbicie biegu z wilgoci (rekuperator_wilgotnosc.yaml) samo wraca do harmonogramu
+      - condition: template
+        value_template: "{{ not is_state('input_boolean.rekuperator_wilgoc_aktywne', 'on') }}"
+    action:
+      - delay: {seconds: 20}
+      - variables:
+          cel: >-
+            {{ states("input_select.rekuperator_tryb_noc")
+               if is_state("schedule.rekuperator_noc", "on")
+               else states("input_select.rekuperator_tryb_dzien") }}
+      - condition: template
+        value_template: >-
+          {{ states("select.rekuperator_tryb_pracy") not in ["unavailable", "unknown", "Urlop", "Wyłączony"]
+             and states("sensor.rekuperator_stan_pracy") not in ["Przewietrzanie", "Kominek"]
+             and states("select.rekuperator_tryb_pracy") != cel }}
+      - action: select.select_option
+        target:
+          entity_id: select.rekuperator_tryb_pracy
+        data:
+          option: "{{ cel }}"

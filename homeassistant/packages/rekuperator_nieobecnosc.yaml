@@ -1,0 +1,88 @@
+# =====================================================================
+#  REKUPERATOR – NIEOBECNOŚĆ (dodane 10.11.2026, zgoda użytkownika)
+#  Plik: /config/packages/rekuperator_nieobecnosc.yaml
+#  Nikogo w domu przez 3 h  → tryb „Urlop” (wolna wentylacja).
+#  (binary_sensor.ktos_w_domu sam czeka 30 min bez sygnału, więc automat
+#   czeka jeszcze 2 h 30 min = razem 3 h od ostatniego sygnału.)
+#  Ktoś wraca               → wraca tryb z harmonogramu (dzień/noc).
+#  Wraca TYLKO jeśli „Urlop” ustawił ten automat (flaga niżej) i tryb nadal
+#  jest „Urlop” – ręczna zmiana biegu lub ręczny Urlop nie są ruszane.
+#  Nie działa podczas Przewietrzania/Kominka ani gdy tryb = Wyłączony.
+#  Wyłącznik: input_boolean.rekuperator_urlop_gdy_nikogo_wlaczony.
+# =====================================================================
+input_boolean:
+  rekuperator_urlop_gdy_nikogo_wlaczony:
+    name: "Rekuperator – Urlop gdy nikogo 3 h (włączone)"
+    icon: mdi:home-export-outline
+    initial: true
+  rekuperator_urlop_z_nieobecnosci:
+    name: "Rekuperator – Urlop ustawiony przez nieobecność"
+    icon: mdi:flag
+
+automation:
+  - id: rekuperator_urlop_nikogo_3h
+    alias: Rekuperator – nikogo w domu 3 h → Urlop
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ktos_w_domu
+        to: "off"
+        for: {hours: 2, minutes: 30}
+      - platform: homeassistant
+        event: start
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_urlop_gdy_nikogo_wlaczony
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.rekuperator_urlop_z_nieobecnosci
+        state: "off"
+      - condition: template
+        value_template: >-
+          {{ is_state("binary_sensor.ktos_w_domu", "off")
+             and (now() - states.binary_sensor.ktos_w_domu.last_changed).total_seconds() >= 9000 }}
+    action:
+      - delay: {seconds: 30}
+      - condition: template
+        value_template: >-
+          {{ states("select.rekuperator_tryb_pracy") not in ["unavailable", "unknown", "Urlop", "Wyłączony"]
+             and states("sensor.rekuperator_stan_pracy") not in ["Przewietrzanie", "Kominek"]
+             and is_state("binary_sensor.ktos_w_domu", "off") }}
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.rekuperator_urlop_z_nieobecnosci
+      - action: select.select_option
+        target:
+          entity_id: select.rekuperator_tryb_pracy
+        data:
+          option: "Urlop"
+
+  - id: rekuperator_powrot_z_urlopu
+    alias: Rekuperator – ktoś wrócił → tryb z harmonogramu
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.ktos_w_domu
+        to: "on"
+      - platform: state
+        entity_id: binary_sensor.przyjazd_do_domu
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_urlop_z_nieobecnosci
+        state: "on"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.rekuperator_urlop_z_nieobecnosci
+      - condition: state
+        entity_id: select.rekuperator_tryb_pracy
+        state: "Urlop"
+      - action: select.select_option
+        target:
+          entity_id: select.rekuperator_tryb_pracy
+        data:
+          option: >-
+            {{ states("input_select.rekuperator_tryb_noc")
+               if is_state("schedule.rekuperator_noc", "on")
+               else states("input_select.rekuperator_tryb_dzien") }}

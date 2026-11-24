@@ -1,0 +1,133 @@
+# =====================================================================
+#  Czujnik wilgotności i temperatury w skrzynce rozprężnej WYCIĄGU
+#  rekuperatora (WANAS 350). NodeMCU v3 (ESP8266, ESP-12E) + SHT3x (SHT30/31/35, I2C).
+#  Obudowa (pod SHT45, czujnik SHT3x): wanas_sht45_korpus/pokrywa.stl
+#  Plik: /config/esphome/wanas-wilgotnosc.yaml  (24.11.2026)
+#
+#  Połączenie (przewód 4-żyłowy, możliwie krótki – do ~1 m):
+#    SHT3x VIN/VCC -> 3V3        SHT3x GND -> G (GND)
+#    SHT3x SDA     -> D2 (GPIO4) SHT3x SCL -> D1 (GPIO5)
+#    (ADDR czujnika do GND albo niepodłączony = adres 0x44)
+#  Zasilanie ESP: zasilacz 5 V przez micro-USB (albo 5 V na pin VIN).
+#  PIERWSZE wgranie: kablem micro-USB (ESPHome → Install → Plug into this
+#  computer albo web.esphome.io). NodeMCU v3 ma zwykle układ CH340 – jeśli
+#  komputer nie widzi portu, doinstaluj sterownik CH340. Kabel musi przesyłać
+#  dane (nie tylko ładowanie). Kolejne wgrania: bezprzewodowo (OTA).
+#
+#  W HA (urządzenie „Rekuperator wyciąg”):
+#    sensor.rekuperator_wyciag_temperatura, sensor.rekuperator_wyciag_wilgotnosc,
+#    sensor.rekuperator_wyciag_punkt_rosy, sensor.rekuperator_wyciag_wilgotnosc_bezwzgledna
+#  Automatyka „wilgoć → wyższy bieg”: /config/packages/rekuperator_wilgotnosc.yaml
+# =====================================================================
+
+substitutions:
+  name: wanas-wilgotnosc
+  friendly: "Rekuperator wyciąg"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly}
+  comment: "SHT3x w skrzynce rozprężnej wyciągu rekuperatora"
+
+esp8266:
+  board: nodemcuv2        # NodeMCU v3 (Lolin) = ten sam układ co v2, ESP-12E 4 MB
+
+logger:
+  level: INFO
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  output_power: 20dB
+  power_save_mode: none
+  ap:
+    ssid: "${name}-awaryjny"
+    password: !secret ap_password
+
+captive_portal:
+
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+time:
+  - platform: homeassistant
+    id: ha_czas
+
+i2c:
+  sda: GPIO4             # D2
+  scl: GPIO5             # D1
+  scan: true
+  frequency: 50kHz      # wolniej = pewniej na dłuższym przewodzie
+
+sensor:
+  - platform: sht3xd
+    address: 0x44        # ADDR do GND (0x45 gdy ADDR do VCC)
+    update_interval: 10s
+    temperature:
+      name: "Temperatura"
+      id: t_wyc
+      accuracy_decimals: 1
+      filters:
+        - sliding_window_moving_average: { window_size: 6, send_every: 3 }
+    humidity:
+      name: "Wilgotność"
+      id: rh_wyc
+      accuracy_decimals: 0
+      filters:
+        - clamp: { min_value: 0, max_value: 100 }
+        - sliding_window_moving_average: { window_size: 6, send_every: 3 }
+
+  # Punkt rosy powietrza wywiewanego z domu (wzór Magnusa).
+  # Gdy temperatura wyrzutu spada poniżej punktu rosy – w wymienniku skrapla się woda.
+  - platform: template
+    name: "Punkt rosy"
+    id: dew_wyc
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 30s
+    lambda: |-
+      const float t = id(t_wyc).state, rh = id(rh_wyc).state;
+      if (std::isnan(t) || std::isnan(rh) || rh <= 0) return NAN;
+      const float a = 17.62f, b = 243.12f;
+      const float g = logf(rh / 100.0f) + a * t / (b + t);
+      return b * g / (a - g);
+
+  # Wilgotność bezwzględna [g/m³] – pozwala porównać „ile wody” jest w powietrzu
+  # niezależnie od temperatury (np. dom vs zewnątrz).
+  - platform: template
+    name: "Wilgotność bezwzględna"
+    id: ah_wyc
+    unit_of_measurement: "g/m³"
+    icon: mdi:water
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 30s
+    lambda: |-
+      const float t = id(t_wyc).state, rh = id(rh_wyc).state;
+      if (std::isnan(t) || std::isnan(rh)) return NAN;
+      return 6.112f * expf(17.67f * t / (t + 243.5f)) * rh * 2.1674f / (273.15f + t);
+
+  - { platform: wifi_signal, name: "Wi-Fi sygnał", entity_category: diagnostic, update_interval: 60s }
+  - { platform: uptime, type: timestamp, name: "Uruchomiony", entity_category: diagnostic }
+
+binary_sensor:
+  - platform: status
+    name: "Status"
+
+button:
+  - platform: restart
+    name: "Restart"
+    entity_category: config
+
+text_sensor:
+  - platform: wifi_info
+    bssid:
+      name: "Punkt dostępowy (BSSID)"
+      entity_category: diagnostic

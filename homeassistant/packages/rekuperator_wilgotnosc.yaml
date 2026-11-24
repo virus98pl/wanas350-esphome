@@ -1,0 +1,287 @@
+# =====================================================================
+#  REKUPERATOR – WILGOTNOŚĆ WYCIĄGU (dodane 24.11.2026, prośba użytkownika)
+#  Plik: /config/packages/rekuperator_wilgotnosc.yaml
+#  Czujnik: ESPHome „Rekuperator wyciąg” (esphome/wanas-wilgotnosc.yaml, SHT3x
+#  w skrzynce rozprężnej wyciągu) → sensor.rekuperator_wyciag_wilgotnosc.
+#
+#  Uwaga: powietrze w skrzynce ma ok. 15 °C (T wyciąg), więc wilgotność
+#  względna jest tam WYŻSZA niż w pokojach (21 °C / 45 % ≈ 65 % w skrzynce).
+#  Dlatego główne kryterium to SKOK wilgotności względem minimum z 2 h
+#  (prysznic, gotowanie, suszenie prania), a próg bezwzględny jest wysoki.
+#
+#  Działanie:
+#   • binary_sensor.rekuperator_wilgoc_podwyzszona = on, gdy
+#       wilgotność ≥ próg  LUB  wilgotność − minimum z 2 h ≥ skok
+#     (wyłącza się, gdy spadnie o 5 pkt poniżej progu i skok < połowy).
+#   • Automatyka podnosi bieg (dzień: Bieg 3, noc: Bieg 2 – do zmiany),
+#     tylko gdy obecny bieg jest niższy; nie rusza Urlop/Wyłączony,
+#     Przewietrzania i Kominka.
+#   • Po opadnięciu wilgoci (10 min) albo po limicie czasu wraca do trybu
+#     z harmonogramu (gdy harmonogram wyłączony – do trybu sprzed podbicia).
+#   • Ręczna zmiana trybu w trakcie podbicia = koniec podbicia (bez cofania).
+#   • Telegram, gdy czujnik jest niedostępny 30 min.
+# =====================================================================
+
+input_boolean:
+  rekuperator_wilgoc_wlaczona:
+    name: "Rekuperator – podbijanie biegu przy wilgoci"
+    icon: mdi:water-percent-alert
+  rekuperator_wilgoc_aktywne:
+    name: "Rekuperator – podbicie z wilgoci trwa"
+    icon: mdi:fan-plus
+  rekuperator_wilgoc_alert_wyslany:
+    name: "Rekuperator – alert czujnika wilgotności wysłany"
+    icon: mdi:bell-check
+
+input_number:
+  rekuperator_wilgoc_skok:
+    name: "Rekuperator – wilgoć: skok ponad min. 2 h"
+    min: 3
+    max: 25
+    step: 1
+    unit_of_measurement: "pkt %"
+    icon: mdi:trending-up
+    mode: box
+  rekuperator_wilgoc_prog:
+    name: "Rekuperator – wilgoć: próg bezwzględny"
+    min: 60
+    max: 99
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:water-percent
+    mode: box
+  rekuperator_wilgoc_maks_czas:
+    name: "Rekuperator – wilgoć: maks. czas podbicia"
+    min: 15
+    max: 240
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: box
+
+input_select:
+  rekuperator_tryb_wilgoc_dzien:
+    name: "Rekuperator – bieg przy wilgoci (dzień)"
+    icon: mdi:weather-sunny
+    options: ["Bieg 2", "Bieg 3", "Bieg 4"]
+  rekuperator_tryb_wilgoc_noc:
+    name: "Rekuperator – bieg przy wilgoci (noc)"
+    icon: mdi:weather-night
+    options: ["Bieg 1", "Bieg 2", "Bieg 3", "Bieg 4"]
+
+input_text:
+  # „tryb sprzed podbicia|tryb podbicia” – do powrotu po końcu wilgoci
+  rekuperator_wilgoc_pamiec:
+    name: "Rekuperator – wilgoć: pamięć trybu"
+    max: 60
+
+sensor:
+  - platform: statistics
+    name: "Rekuperator wyciąg wilgotność min 2h"
+    unique_id: rekuperator_wyciag_wilgotnosc_min_2h
+    entity_id: sensor.rekuperator_wyciag_wilgotnosc
+    state_characteristic: value_min
+    max_age: { hours: 2 }
+    sampling_size: 2000
+    precision: 0
+
+template:
+  - binary_sensor:
+      - name: "Rekuperator wilgoć podwyższona"
+        unique_id: rekuperator_wilgoc_podwyzszona
+        icon: mdi:water-alert
+        delay_on: { minutes: 1 }
+        state: >-
+          {% set rh = states('sensor.rekuperator_wyciag_wilgotnosc') | float(none) %}
+          {% set base = states('sensor.rekuperator_wyciag_wilgotnosc_min_2h') | float(none) %}
+          {% set prog = states('input_number.rekuperator_wilgoc_prog') | float(85) %}
+          {% set skok = states('input_number.rekuperator_wilgoc_skok') | float(8) %}
+          {% if rh is none %}false
+          {% else %}
+            {% set wzrost = (rh - base) if base is not none else 0 %}
+            {% if this.state == 'on' %}{{ rh >= prog - 5 or wzrost >= skok / 2 }}
+            {% else %}{{ rh >= prog or wzrost >= skok }}{% endif %}
+          {% endif %}
+        attributes:
+          wzrost_ponad_min_2h: >-
+            {% set rh = states('sensor.rekuperator_wyciag_wilgotnosc') | float(none) %}
+            {% set base = states('sensor.rekuperator_wyciag_wilgotnosc_min_2h') | float(none) %}
+            {{ (rh - base) | round(0) if rh is not none and base is not none else none }}
+
+    sensor:
+      # Zapas temperatury wyrzutu nad punktem rosy powietrza z domu.
+      # Ujemny = w wymienniku skrapla się woda (przy T wyrzutu < 0 °C – ryzyko szronu).
+      - name: "Rekuperator wymiennik zapas nad punktem rosy"
+        unique_id: rekuperator_wymiennik_zapas_punkt_rosy
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:snowflake-thermometer
+        state: >-
+          {% set w = states('sensor.rekuperator_t_wyrzut') | float(none) %}
+          {% set d = states('sensor.rekuperator_wyciag_punkt_rosy') | float(none) %}
+          {{ (w - d) | round(1) if w is not none and d is not none else none }}
+        availability: >-
+          {{ has_value('sensor.rekuperator_t_wyrzut') and has_value('sensor.rekuperator_wyciag_punkt_rosy') }}
+
+automation:
+  # -------------------------------------------------------------------
+  - id: rekuperator_wilgoc_podbij_bieg
+    alias: Rekuperator – wilgoć w wyciągu → wyższy bieg
+    description: "Pakiet rekuperator_wilgotnosc.yaml"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.rekuperator_wilgoc_podwyzszona
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_wilgoc_wlaczona
+        state: "on"
+      - condition: state
+        entity_id: input_boolean.rekuperator_wilgoc_aktywne
+        state: "off"
+    action:
+      - variables:
+          rank: {"Nocny": 0, "Bieg 1": 1, "Bieg 2": 2, "Bieg 3": 3, "Bieg 4": 4}
+          teraz: "{{ states('select.rekuperator_tryb_pracy') }}"
+          cel: >-
+            {{ states('input_select.rekuperator_tryb_wilgoc_noc')
+               if is_state('schedule.rekuperator_noc', 'on')
+               else states('input_select.rekuperator_tryb_wilgoc_dzien') }}
+      - condition: template
+        value_template: >-
+          {{ teraz in rank and cel in rank and rank[teraz] < rank[cel]
+             and states('sensor.rekuperator_stan_pracy') not in ['Przewietrzanie', 'Kominek'] }}
+      - action: input_text.set_value
+        target: { entity_id: input_text.rekuperator_wilgoc_pamiec }
+        data: { value: "{{ teraz }}|{{ cel }}" }
+      - action: input_boolean.turn_on
+        target: { entity_id: input_boolean.rekuperator_wilgoc_aktywne }
+      - action: select.select_option
+        target: { entity_id: select.rekuperator_tryb_pracy }
+        data: { option: "{{ cel }}" }
+
+  # -------------------------------------------------------------------
+  - id: rekuperator_wilgoc_koniec
+    alias: Rekuperator – wilgoć opadła → powrót trybu
+    description: "Pakiet rekuperator_wilgotnosc.yaml"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.rekuperator_wilgoc_podwyzszona
+        to: "off"
+        for: { minutes: 10 }
+        id: opadla
+      - platform: state
+        entity_id: binary_sensor.rekuperator_wilgoc_podwyzszona
+        to: "unavailable"
+        for: { minutes: 10 }
+        id: opadla
+      - platform: state
+        entity_id: input_boolean.rekuperator_wilgoc_aktywne
+        to: "on"
+        for: { minutes: "{{ states('input_number.rekuperator_wilgoc_maks_czas') | int(90) }}" }
+        id: limit
+      - platform: state
+        entity_id: input_boolean.rekuperator_wilgoc_wlaczona
+        to: "off"
+        id: opadla
+      - platform: state
+        entity_id: select.rekuperator_tryb_pracy
+        id: recznie
+      - platform: homeassistant
+        event: start
+        id: opadla
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_wilgoc_aktywne
+        state: "on"
+    action:
+      - variables:
+          pamiec: "{{ states('input_text.rekuperator_wilgoc_pamiec').split('|') }}"
+          przed: "{{ pamiec[0] if pamiec | count == 2 else '' }}"
+          podbity: "{{ pamiec[1] if pamiec | count == 2 else '' }}"
+      - if:
+          - condition: trigger
+            id: recznie
+        then:
+          # Uwaga: sam „condition” w then zatrzymałby tylko ten blok, a reszta
+          # automatyki by poszła dalej (błąd z 24.11) – dlatego if + stop.
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ trigger.to_state.state not in [podbity, 'unavailable', 'unknown']
+                     and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+            then:
+              - action: input_boolean.turn_off
+                target: { entity_id: input_boolean.rekuperator_wilgoc_aktywne }
+              - stop: "Ręczna zmiana trybu – koniec podbicia bez cofania"
+          - stop: "Własna zmiana na bieg podbicia albo chwilowa niedostępność – nic nie robię"
+      - if:
+          - condition: trigger
+            id: opadla
+          - condition: template
+            value_template: "{{ trigger.platform == 'homeassistant' and is_state('binary_sensor.rekuperator_wilgoc_podwyzszona', 'on') }}"
+        then:
+          - stop: "Start HA, a wilgoć nadal podwyższona – czekamy"
+      - action: input_boolean.turn_off
+        target: { entity_id: input_boolean.rekuperator_wilgoc_aktywne }
+      - variables:
+          cel: >-
+            {% if is_state('input_boolean.rekuperator_harmonogram_wlaczony', 'on') %}
+              {{ states('input_select.rekuperator_tryb_noc') if is_state('schedule.rekuperator_noc', 'on')
+                 else states('input_select.rekuperator_tryb_dzien') }}
+            {% else %}{{ przed }}{% endif %}
+      - condition: template
+        value_template: >-
+          {{ cel != '' and states('select.rekuperator_tryb_pracy') == podbity and cel != podbity }}
+      - action: select.select_option
+        target: { entity_id: select.rekuperator_tryb_pracy }
+        data: { option: "{{ cel }}" }
+
+  # -------------------------------------------------------------------
+  - id: rekuperator_wilgoc_czujnik_niedostepny
+    alias: Rekuperator – czujnik wilgotności wyciągu niedostępny (Telegram)
+    description: "Pakiet rekuperator_wilgotnosc.yaml"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.rekuperator_wyciag_wilgotnosc
+        to: ["unavailable", "unknown"]
+        for: { minutes: 30 }
+        id: brak
+      - platform: state
+        entity_id: sensor.rekuperator_wyciag_wilgotnosc
+        not_to: ["unavailable", "unknown"]
+        for: { minutes: 2 }
+        id: jest
+    action:
+      - if:
+          - condition: trigger
+            id: brak
+          - condition: state
+            entity_id: input_boolean.rekuperator_wilgoc_alert_wyslany
+            state: "off"
+        then:
+          - action: input_boolean.turn_on
+            target: { entity_id: input_boolean.rekuperator_wilgoc_alert_wyslany }
+          - action: script.powiadomienie
+            data:
+              title: "💧 Czujnik wilgotności rekuperatora offline"
+              message: >-
+                Czujnik w skrzynce wyciągu (ESPHome „Rekuperator wyciąg”) nie odpowiada od 30 min.
+                Podbijanie biegu przy wilgoci nie działa. Sprawdź zasilacz USB / Wi-Fi.
+      - if:
+          - condition: trigger
+            id: jest
+          - condition: state
+            entity_id: input_boolean.rekuperator_wilgoc_alert_wyslany
+            state: "on"
+        then:
+          - action: input_boolean.turn_off
+            target: { entity_id: input_boolean.rekuperator_wilgoc_alert_wyslany }
+          - action: script.powiadomienie
+            data:
+              title: "✅ Czujnik wilgotności rekuperatora znów działa"
+              message: "Wilgotność wyciągu: {{ states('sensor.rekuperator_wyciag_wilgotnosc') }} %."

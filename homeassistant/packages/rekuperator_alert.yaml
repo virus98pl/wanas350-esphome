@@ -1,0 +1,230 @@
+# =====================================================================
+#  REKUPERATOR – ALERT NA TELEGRAM, GDY STOI (dodane 10.11.2026, zgoda użytkownika)
+#  Plik: /config/packages/rekuperator_alert.yaml
+#  Powiadomienia: script.powiadomienie (powiadomienia.yaml → Telegram).
+#  Alert wysyła się raz (flaga input_boolean.rekuperator_alert_wyslany),
+#  po powrocie do pracy przychodzi drugi komunikat „znów pracuje”.
+#  Gdy tryb pracy = „Wyłączony” lub „Nocny” (obroty bardzo niskie) – alerty z poboru/obrotów są pomijane.
+#  Normalnie: Bieg 2 ≈ 1650 obr/min i ≈ 29 W na gniazdku.
+# =====================================================================
+input_boolean:
+  rekuperator_alert_wyslany:
+    name: "Rekuperator – alert wysłany"
+    icon: mdi:air-filter
+  rekuperator_alarm_zgloszony:
+    name: "Rekuperator – alarm sterownika zgłoszony"
+    icon: mdi:alert
+
+automation:
+  - id: rekuperator_stoi_alert
+    alias: Rekuperator – stoi (alert Telegram)
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_gniazdo_power
+        below: 8
+        for: {minutes: 10}
+        id: pobor
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_obroty_nawiew
+        below: 200
+        for: {minutes: 5}
+        id: obroty
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_obroty_wywiew
+        below: 200
+        for: {minutes: 5}
+        id: obroty
+      - platform: state
+        entity_id: switch.rekuperator_gniazdo
+        to: "off"
+        for: {minutes: 2}
+        id: gniazdo_off
+      - platform: state
+        entity_id: switch.rekuperator_gniazdo
+        to: unavailable
+        for: {minutes: 15}
+        id: gniazdo_nd
+      - platform: state
+        entity_id: sensor.rekuperator_stan_pracy
+        to: unavailable
+        for: {minutes: 15}
+        id: sterownik_nd
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_alert_wyslany
+        state: "off"
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: [gniazdo_off, gniazdo_nd, sterownik_nd]
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: select.rekuperator_tryb_pracy
+                state: ["Wyłączony", "Nocny"]
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.rekuperator_alert_wyslany
+      - action: script.powiadomienie
+        data:
+          title: "🌬️ Rekuperator STOI"
+          message: >-
+            {% set t = trigger.id %}
+            {% if t == "pobor" %}Pobór mocy z gniazdka spadł poniżej 8 W od 10 min (normalnie ok. 29 W): {{ states("sensor.rekuperator_gniazdo_power") }} W.
+            {% elif t == "obroty" %}Wentylatory stoją od 5 min (poniżej 200 obr/min): nawiew {{ states("sensor.rekuperator_obroty_nawiew") }}, wywiew {{ states("sensor.rekuperator_obroty_wywiew") }} obr/min. Tryb: {{ states("select.rekuperator_tryb_pracy") }}.
+            {% elif t == "gniazdo_off" %}Gniazdko zasilające rekuperator jest WYŁĄCZONE od 2 min.
+            {% elif t == "gniazdo_nd" %}Gniazdko Zigbee rekuperatora niedostępne od 15 min (brak zasilania lub zasięgu).
+            {% else %}Sterownik rekuperatora (wanas350) niedostępny od 15 min – brak Wi-Fi lub zasilania.
+            {% endif %}
+            Alarmy: {{ states("sensor.rekuperator_aktywne_alarmy") }}.
+
+  - id: rekuperator_wrocil_info
+    alias: Rekuperator – znów pracuje (info Telegram)
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_obroty_nawiew
+        above: 500
+        for: {minutes: 3}
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_alert_wyslany
+        state: "on"
+      - condition: state
+        entity_id: switch.rekuperator_gniazdo
+        state: "on"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.rekuperator_alert_wyslany
+      - action: script.powiadomienie
+        data:
+          title: "✅ Rekuperator znów pracuje"
+          message: >-
+            Obroty: nawiew {{ states("sensor.rekuperator_obroty_nawiew") }}, wywiew {{ states("sensor.rekuperator_obroty_wywiew") }} obr/min. Tryb: {{ states("select.rekuperator_tryb_pracy") }}.
+
+  # -------------------------------------------------------------------
+  #  ALARMY STEROWNIKA NA TELEGRAM (dodane 16.11.2026, zgoda użytkownika)
+  #  Sterownik sam wykrywa: ryzyko zamarzania wymiennika, awarię czujnika
+  #  temperatury, awarię wentylatora, filtry do wymiany
+  #  (sensor.rekuperator_aktywne_alarmy). Wiadomość idzie, gdy alarm trwa
+  #  2 min (krótkie mignięcia po restarcie są pomijane) i ponownie, gdy
+  #  lista alarmów się zmieni. Po 5 min bez alarmów – „alarm ustąpił”.
+  # -------------------------------------------------------------------
+  - id: rekuperator_alarm_sterownika
+    alias: Rekuperator – alarm sterownika (Telegram)
+    mode: queued
+    max: 5
+    trigger:
+      - platform: state
+        entity_id: sensor.rekuperator_aktywne_alarmy
+        for: {minutes: 2}
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['brak', 'unavailable', 'unknown', ''] }}"
+    action:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.rekuperator_alarm_zgloszony
+      - action: script.powiadomienie
+        data:
+          title: >-
+            {% set a = trigger.to_state.state %}
+            {% if 'przegrzanie' in a %}🔥 Rekuperator – PRZEGRZANIE NAGRZEWNICY (zablokowana)
+            {% elif 'zamarzania' in a %}🧊 Rekuperator – RYZYKO ZAMARZANIA
+            {% elif 'wentylatora' in a %}🌬️ Rekuperator – awaria wentylatora
+            {% elif 'czujnik' in a %}🌡️ Rekuperator – awaria czujnika temperatury
+            {% elif 'filtry' in a %}🧹 Rekuperator – filtry do wymiany
+            {% else %}⚠️ Rekuperator – alarm{% endif %}
+          message: >-
+            Alarmy: {{ trigger.to_state.state }}.
+            Tryb: {{ states("sensor.rekuperator_stan_pracy") }},
+            obroty nawiew/wywiew: {{ states("sensor.rekuperator_obroty_nawiew") | float(0) | round(0) | int }}/{{ states("sensor.rekuperator_obroty_wywiew") | float(0) | round(0) | int }} obr/min.
+            Temperatury: czerpnia {{ states("sensor.rekuperator_t_czerpnia_wlot_centrali") | float(0) | round(1) }},
+            nawiew {{ states("sensor.rekuperator_t_nawiew") | float(0) | round(1) }},
+            wyciąg {{ states("sensor.rekuperator_t_wyciag_dom") | float(0) | round(1) }},
+            wyrzut {{ states("sensor.rekuperator_t_wyrzut") | float(0) | round(1) }} °C.
+            Nagrzewnica wstępna: {{ "pracuje" if is_state("binary_sensor.rekuperator_nagrzewnica_wstepna_pracuje", "on") else "nie pracuje" }}.
+
+  - id: rekuperator_alarm_sterownika_koniec
+    alias: Rekuperator – alarm sterownika ustąpił (Telegram)
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.rekuperator_aktywne_alarmy
+        to: brak
+        for: {minutes: 5}
+    condition:
+      - condition: state
+        entity_id: input_boolean.rekuperator_alarm_zgloszony
+        state: "on"
+    action:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.rekuperator_alarm_zgloszony
+      - action: script.powiadomienie
+        data:
+          title: "✅ Rekuperator – alarm ustąpił"
+          message: >-
+            Sterownik nie zgłasza już alarmów. Tryb: {{ states("sensor.rekuperator_stan_pracy") }}.
+
+  # -------------------------------------------------------------------
+  #  AWARYJNE WYŁĄCZENIE GNIAZDKA (dodane 23.11.2026, zgoda użytkownika)
+  #  Druga, niezależna warstwa ochrony nagrzewnicy 500 W – na wypadek, gdy
+  #  sterownik jej nie wyłączy (zawieszony ESP, sklejony przekaźnik K1).
+  #  Normalny pobór: ok. 7–70 W (wentylatory); z nagrzewnicą ok. +500 W.
+  #  Wyłącza gniazdko (cały rekuperator), gdy:
+  #   - pobór > 300 W przez 1 min, a sterownik mówi „K1 wyłączony”
+  #     albo jest niedostępny (nagrzewnica grzeje bez kontroli),
+  #   - pobór > 300 W dłużej niż 75 min (limit sterownika 60 min nie zadziałał),
+  #   - T czerpni za nagrzewnicą > 55 °C przez 1 min (limit sterownika 40 °C nie zadziałał).
+  #  Gniazdko zostaje WYŁĄCZONE – włącza się ręcznie po sprawdzeniu.
+  # -------------------------------------------------------------------
+  - id: rekuperator_gniazdo_awaryjne_wylaczenie
+    alias: Rekuperator – awaryjne wyłączenie gniazdka (nagrzewnica)
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_gniazdo_power
+        above: 300
+        for: {minutes: 1}
+        id: moc_bez_k1
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_gniazdo_power
+        above: 300
+        for: {minutes: 75}
+        id: moc_za_dlugo
+      - platform: numeric_state
+        entity_id: sensor.rekuperator_t_czerpnia_wlot_centrali
+        above: 55
+        for: {minutes: 1}
+        id: temperatura
+    condition:
+      - condition: state
+        entity_id: switch.rekuperator_gniazdo
+        state: "on"
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: [moc_za_dlugo, temperatura]
+          - condition: not
+            conditions:
+              - condition: state
+                entity_id: switch.rekuperator_nagrzewnica_wstepna_k1
+                state: "on"
+    action:
+      - action: switch.turn_off
+        target:
+          entity_id: switch.rekuperator_gniazdo
+      - action: script.powiadomienie
+        data:
+          title: "🔥 Rekuperator – AWARYJNIE WYŁĄCZONY"
+          message: >-
+            {% set t = trigger.id %}
+            {% if t == "moc_bez_k1" %}Pobór {{ states("sensor.rekuperator_gniazdo_power") }} W przez 1 min, a sterownik nie potwierdza pracy nagrzewnicy (K1: {{ states("switch.rekuperator_nagrzewnica_wstepna_k1") }}) – możliwy sklejony przekaźnik lub zawieszony sterownik.
+            {% elif t == "moc_za_dlugo" %}Nagrzewnica pobiera prąd bez przerwy od ponad 75 min ({{ states("sensor.rekuperator_gniazdo_power") }} W) – limit sterownika nie zadziałał.
+            {% else %}Temperatura za nagrzewnicą {{ states("sensor.rekuperator_t_czerpnia_wlot_centrali") }} °C (powyżej 55 °C).
+            {% endif %}
+            Gniazdko wyłączone – cały rekuperator stoi. Sprawdź centralę przed ponownym włączeniem gniazdka.

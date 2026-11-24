@@ -7,7 +7,12 @@
    bypass_mode (select), state (sensor stan pracy), duty (wysterowanie nawiewu %),
    duty_exh, rpm_sup, rpm_exh, eff (sprawność), alarm (sensor alarmów),
    party_btn+party_min (Przewietrzanie: przycisk + number czasu), fire_btn+fire_min (Kominek),
-   stop_btn (zakończ tryb czasowy), party_left/fire_left (pozostało min). */
+   stop_btn (zakończ tryb czasowy), party_left/fire_left (pozostało min).
+   Wersja 4 (24.11.2026): rh_room (wilgotność wyciągu, pod „Pomieszczenia”),
+   rh_boost (input_boolean – podbicie biegu z wilgoci trwa → „↑ wilgoć”).
+   Wersja 5 (24.11.2026): heater (binary_sensor nagrzewnica pracuje → grzałka na wlocie
+   świeci i paruje), bypass (binary_sensor bypass otwarty → zielona ścieżka omijająca
+   wymiennik, wymiennik przygaszony); wilgotność w osobnej linii pod „Pomieszczenia”. */
 
 const DAYS = ["Niedziela","Poniedziałek","Wtorek","Środa","Czwartek","Piątek","Sobota"];
 
@@ -29,6 +34,17 @@ ha-card{overflow:hidden;background:#1d1d20;padding:10px;border-radius:12px}
 .tv{font-size:34px;font-weight:300;letter-spacing:-1px;line-height:1}
 .tv sup{font-size:.45em;vertical-align:top}
 .tl{font-size:13px;color:var(--muted);margin-top:2px}
+.th{font-size:13px;color:var(--blue-d);margin-top:1px;white-space:nowrap;font-weight:600}.th:empty{display:none}
+.heat{display:none}.heat.has{display:inline}
+.heat .coil{stroke:#9b99b3;transition:stroke .4s}.heat .box{fill:#f4f3fb;stroke:#9b99b3;transition:all .4s}
+.heat.on .coil{stroke:#ff6a1f;animation:glow 1s ease-in-out infinite alternate}
+.heat.on .box{fill:#ffe3cf;stroke:#ff8a3d}
+.heat .wave{opacity:0;fill:none;stroke:#ff8a3d;stroke-width:1.6;stroke-linecap:round;transform-box:fill-box}
+.heat.on .wave{animation:rise 1.8s ease-in infinite}.heat.on .wave.w2{animation-delay:.6s}.heat.on .wave.w3{animation-delay:1.2s}
+@keyframes glow{from{opacity:.7}to{opacity:1;filter:drop-shadow(0 0 2px #ff6a1f)}}
+@keyframes rise{0%{opacity:0;transform:translateY(4px)}35%{opacity:.95}100%{opacity:0;transform:translateY(-9px)}}
+#byp,#bypT{display:none}.byp-on #byp,.byp-on #bypT{display:inline}
+#hx{transition:opacity .5s}.byp-on #hx{opacity:.3}
 .house{width:100%;cursor:pointer;display:block}
 .fan{transform-box:fill-box;transform-origin:center;animation:spin var(--spd,1.2s) linear infinite}
 .fan.stop,.flow.stop{animation:none}
@@ -108,7 +124,7 @@ class RekuperatorCard extends HTMLElement {
 
   /* ---------- build ---------- */
   _build(){
-    const T=(id,lbl,c)=>`<div class="temp" data-more="${id}">${THERM(c)}<div><div class="tv" id="${id}">--<sup>°</sup></div><div class="tl">${lbl}</div></div></div>`;
+    const T=(id,lbl,c)=>`<div class="temp" data-more="${id}">${THERM(c)}<div><div class="tv" id="${id}">--<sup>°</sup></div><div class="tl" id="${id}_l">${lbl}</div>${id==="t_room"?'<div class="th" id="t_room_h"></div>':""}</div></div>`;
     this.shadowRoot.innerHTML = `<style>${CSS}</style><ha-card><div class="screen">
       <div class="top"><span>${this._cfg.title||""}</span><span class="inf" id="inf"></span><span id="clock"></span></div>
       <div class="main">
@@ -119,7 +135,14 @@ class RekuperatorCard extends HTMLElement {
           <path class="flow" d="M2 52 C40 44 70 60 100 98 L124 122" fill="none" stroke="var(--blue)" stroke-width="5"/>
           <path class="flow" d="M136 122 L162 96 L175 76 H238" fill="none" stroke="var(--blue)" stroke-width="5"/>
           <path d="M236 68 L250 76 L236 84 Z" fill="var(--blue)"/>
-          <rect x="114" y="106" width="32" height="32" transform="rotate(45 130 122)" fill="rgba(160,150,230,.25)" stroke="#a79ee0" stroke-width="2.5"/>
+          <rect id="hx" x="114" y="106" width="32" height="32" transform="rotate(45 130 122)" fill="rgba(160,150,230,.25)" stroke="#a79ee0" stroke-width="2.5"/>
+          <path id="byp" class="flow" d="M100 98 Q130 74 156 110 L160 138" fill="none" stroke="#2fb67a" stroke-width="5"/>
+          <text id="bypT" x="129" y="80" text-anchor="middle" font-size="10" font-weight="700" fill="#2fb67a" letter-spacing="1">BYPASS</text>
+          <g class="heat" id="heat" transform="translate(12 38)">
+            <path class="wave" d="M5 -2 q-3 -4 0 -8 q3 -4 0 -8"/><path class="wave w2" d="M12 -2 q-3 -4 0 -8 q3 -4 0 -8"/><path class="wave w3" d="M19 -2 q-3 -4 0 -8 q3 -4 0 -8"/>
+            <rect class="box" x="0" y="0" width="24" height="16" rx="3" stroke-width="1.5"/>
+            <path class="coil" d="M3 8 l2.5 -5 l3 10 l3 -10 l3 10 l3 -10 l2.5 5" fill="none" stroke-width="1.8" stroke-linejoin="round"/>
+          </g>
           <path class="flow" d="M86 180 V140 H106 L124 122" fill="none" stroke="var(--red)" stroke-width="5"/>
           <path class="flow" d="M136 122 L152 138 H178 V178" fill="none" stroke="var(--red)" stroke-width="5"/>
           <path d="M170 176 L178 192 L186 176 Z" fill="var(--red)"/>
@@ -168,6 +191,10 @@ class RekuperatorCard extends HTMLElement {
     if(!this._hass||!this.$) return;
     const $=this.$, f=v=>v==null?"--<sup>°</sup>":`${v.toFixed(1)}<sup>°</sup>`;
     $("t_out").innerHTML=f(this._num("t_out")); $("t_room").innerHTML=f(this._num("t_room"));
+    if(this._cfg.entities.rh_room){ const rh=this._num("rh_room");
+      $("t_room_h").textContent=`wilgotność ${rh==null?"--":Math.round(rh)} %${this._on("rh_boost")?" ↑":""}`; }
+    const ht=$("heat"); ht.classList.toggle("has",!!this._cfg.entities.heater); ht.classList.toggle("on",this._on("heater"));
+    $("house").classList.toggle("byp-on",this._on("bypass"));
     $("t_exh").innerHTML=f(this._num("t_exh")); $("t_sup").innerHTML=f(this._num("t_sup"));
     const stn=this._e("state")?this._e("state").state:"";
     const partyOn=stn==="Przewietrzanie", fireOn=stn==="Kominek";
